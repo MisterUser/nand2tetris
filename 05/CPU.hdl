@@ -29,6 +29,12 @@ CHIP CPU {
 
     IN  inM[16],         // M value input  (M = contents of RAM[A])
         instruction[16], // Instruction for execution
+                            // 15: 0
+                            // 14-13: XX
+                            // 12: a  -> chooses A or M 
+                            // 11-6: c1-c6
+                            // 5-3: d1-d3
+                            // 2-0: j1-j3
         reset;           // Signals whether to re-start the current
                          // program (reset==1) or continue executing
                          // the current program (reset==0).
@@ -39,5 +45,30 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    Not(in=instruction[15], out=aINSTR);
+    
+    Or(a=aINSTR, b=instruction[5], out=cA);
+    Mux16(a=instruction, b=outALU, sel=instruction[15], out=outMuxA);
+    ARegister(in=outMuxA, load=cA, out=outA);
+
+    And (a=instruction[4], b=instruction[15], out=writeD);  //if C instruction and d2 bit set
+    DRegister(in=outALU, load=writeD, out=outD);
+    Mux16(a=outA, b=inM, sel=instruction[12], out=outAM);
+    ALU(x=outD, y=outAM, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out=outALU, zr=cZR, ng=cNG);
+
+    And (a=instruction[3], b=instruction[15], out=writeM);  //if C instruction and d3 bit set
+    Rem16(in=outA, out=addressM);
+    And16(a=outALU, b=true, out=outM);
+
+    And(a=cNG, b=instruction[2], out=andZR);
+    And(a=cZR, b=instruction[1], out=andNEG);
+    Or(a=cNG, b=cZR, out=ngORzr);
+    Not(in=ngORzr, out=cPOS);
+    And(a=cPOS, b=instruction[0], out=andPOS);
+    Or(a=andZR, b=andNEG, out=lteq);
+    Or(a=lteq, b=andPOS, out=ltOReqORgt);
+    And(a=instruction[15], b=ltOReqORgt, out=cJMP);
+
+    PC(in=outA, load=cJMP, inc=true, reset=reset, out=outPC);
+    Rem16(in=outPC, out=pc);
 }
